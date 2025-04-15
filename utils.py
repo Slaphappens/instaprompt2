@@ -1,8 +1,9 @@
 # utils.py
+
 import os
-from openai import OpenAI
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
