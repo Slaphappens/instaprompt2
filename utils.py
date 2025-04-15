@@ -51,13 +51,18 @@ def detect_category_from_topic(topic: str) -> str:
 
 def check_quota(email: str, platform: str) -> tuple[bool, str]:
     try:
-        response = supabase.table("profiles").select("plan,used_captions").eq("email", email).single().execute()
-        profile = response.data
-        if not profile:
-            # Fallback: insert trial user
-            supabase.table("profiles").insert({"email": email, "plan": "trial", "used_captions": 0}).execute()
+        response = supabase.table("profiles").select("plan,used_captions").eq("email", email).execute()
+        data = response.data or []
+
+        if len(data) == 0:
+            supabase.table("profiles").insert({
+                "email": email,
+                "plan": "trial",
+                "used_captions": 0
+            }).execute()
             return True, "created trial user"
 
+        profile = data[0]
         plan = profile["plan"]
         used = profile["used_captions"]
 
@@ -80,6 +85,7 @@ def check_quota(email: str, platform: str) -> tuple[bool, str]:
     except Exception as e:
         print("❌ Quota check error:", e)
         return False, "quota error"
+
 
 
 def increment_caption_count(email: str) -> bool:
