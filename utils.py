@@ -25,13 +25,16 @@ TRENDING_HASHTAGS = {
     "viagem": ["#viajarépreciso", "#destinosnacionais", "#mochilao", "#turismobr", "#fyp"],
 }
 
+ALLOWED_CATEGORIES = set(TRENDING_HASHTAGS.keys())
+
 
 def detect_categories_from_topic(topic: str) -> list[str]:
-    system_msg = (
-        "Dado o tópico abaixo, responda com todas as categorias que se aplicam da lista, separadas por vírgula: "
-        "fitness, café, flores, vendas, marketing, moda, comida, pet, beleza, psicologia, relacionamento, viagem"
-    )
     try:
+        system_msg = (
+            "Você é um classificador de tópicos. "
+            "Retorne apenas 1 palavra da lista de categorias abaixo que melhor representa o tópico: "
+            ", ".join(ALLOWED_CATEGORIES)
+        )
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
@@ -39,12 +42,37 @@ def detect_categories_from_topic(topic: str) -> list[str]:
                 {"role": "user", "content": topic}
             ]
         )
-        categories = [c.strip().lower() for c in response.choices[0].message.content.strip().split(",")]
-        print(f"🧠 GPT-mapped categories: {categories}")
-        return categories
+        category = response.choices[0].message.content.strip().lower()
+        print(f"🧠 GPT-mapped category: {category}")
+        if category not in ALLOWED_CATEGORIES:
+            print("⚠️ Unknown category from GPT, falling back to 'vendas'")
+            return ["vendas"]
+        return [category]
     except Exception as e:
         print("❌ GPT category detection failed:", e)
         return ["vendas"]
+
+
+def detect_tone_from_topic(topic: str, language: str = "Português") -> str:
+    try:
+        system_msg = (
+            f"Com base no seguinte tema, responda com um único estilo de tom "
+            f"como: divertido, inspirador, profissional, emocional, criativo, ou direto. "
+            f"Apenas uma palavra como resposta. Escreva em {language}."
+        )
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": topic}
+            ]
+        )
+        tone = response.choices[0].message.content.strip().lower()
+        print(f"🎭 GPT-suggested tone: {tone}")
+        return tone
+    except Exception as e:
+        print("❌ Tone detection failed:", e)
+        return "criativo"
 
 
 def collect_hashtags(categories: list[str]) -> str:
@@ -176,9 +204,9 @@ def get_translated_email_content(caption: str, language: str, topic: str = "", p
             {intro}
             <p>{caption}</p>
             <hr>
-            <p><strong>💡 Dica rápida:</strong> Copie a legenda acima e cole como descrição da sua próxima postagem no Instagram, TikTok ou LinkedIn.</p>
-            <p>📌 Use-a com uma imagem ou vídeo relacionado ao tema.</p>
-            <p>⏰ Publique nos horários de pico (como 12h ou 19h) para alcançar mais pessoas.</p>
+            <p><strong>💡 Dica rápida:</strong> Copie a legenda acima e cole como descrição da sua próxima postagem.</p>
+            <p>📌 Combine com uma imagem ou vídeo relevante.</p>
+            <p>⏰ Publique nos horários de pico (12h ou 19h).</p>
             {rating_html}
             <hr>
             <p>Obrigado por usar <strong>InstaPrompt</strong>!</p>
@@ -192,9 +220,9 @@ def get_translated_email_content(caption: str, language: str, topic: str = "", p
             {intro}
             <p>{caption}</p>
             <hr>
-            <p><strong>💡 Pro tip:</strong> Copy the caption above and paste it directly in your next Instagram, TikTok, or LinkedIn post.</p>
-            <p>📌 Use it with a matching image or video to boost engagement.</p>
-            <p>⏰ Best to post during peak hours (like noon or 7PM) for max reach.</p>
+            <p><strong>💡 Pro tip:</strong> Paste the caption in your next Instagram, TikTok, or LinkedIn post.</p>
+            <p>📌 Match it with a relevant image or video.</p>
+            <p>⏰ Post at peak hours (like 12PM or 7PM).</p>
             {rating_html}
             <hr>
             <p>Thanks for using <strong>InstaPrompt</strong>!</p>
