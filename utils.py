@@ -253,3 +253,24 @@ def upgrade_plan_to_pro(email: str) -> bool:
     except Exception as e:
         print("❌ Stripe upgrade error:", e)
         return False
+
+def detect_tone_from_topic(topic: str, language: str = "português") -> str:
+    system_msg = (
+        "Você é um assistente de marketing. "
+        "Dado um tema de postagem em rede social, responda apenas com o estilo de tom mais adequado: "
+        "divertido, profissional, inspirador, informativo, casual, provocador, poético"
+    )
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": topic}
+            ]
+        )
+        tone = response.choices[0].message.content.strip().lower()
+        print(f"🎯 GPT-suggested tone: {tone}")
+        return tone
+    except Exception as e:
+        print("❌ Tone detection failed:", e)
+        return "criativo"
