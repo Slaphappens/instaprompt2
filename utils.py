@@ -10,53 +10,133 @@ from dotenv import load_dotenv
 load_dotenv()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
-# Supabase init
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_ANON_KEY")
-supabase = create_client(supabase_url, supabase_key)
+TRENDING_HASHTAGS = {
+    "fitness": ["#fitnessbr", "#academia", "#vidasaudavel", "#nopainnogain", "#fyp"],
+    "café": ["#cafedamanha", "#amocafé", "#baristabrasil", "#coffeetime", "#fyp"],
+    "flores": ["#flores", "#buquês", "#diadasmaes", "#presenteperfeito", "#fyp"],
+    "vendas": ["#promoção", "#descontos", "#ofertaespecial", "#comprejá", "#fyp"],
+    "marketing": ["#negociosonline", "#copywriting", "#socialmedia", "#empreendedorismo", "#fyp"],
+    "moda": ["#ootdbr", "#modafeminina", "#tendencias", "#lookdodia", "#fyp"],
+    "comida": ["#comidacaseira", "#gastronomiabrasileira", "#receitafácil", "#delicias", "#fyp"],
+    "pet": ["#vidadepet", "#cachorrofofo", "#gatobr", "#amomeupet", "#fyp"],
+    "beleza": ["#maquiagem", "#dicasdebeleza", "#skincareroutine", "#autocuidado", "#fyp"],
+    "psicologia": ["#saudemental", "#terapiabr", "#bemestar", "#autoconhecimento", "#fyp"],
+    "relacionamento": ["#amor", "#casal", "#relacionamentos", "#vidadois", "#fyp"],
+    "viagem": ["#viajarépreciso", "#destinosnacionais", "#mochilao", "#turismobr", "#fyp"],
+}
+
+
+def detect_category_from_topic(topic: str) -> str:
+    system_msg = "Dado o tópico abaixo, responda apenas com a categoria mais adequada da lista: " \
+                 "fitness, café, flores, vendas, marketing, moda, comida, pet, beleza, psicologia, relacionamento, viagem"
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": topic}
+            ]
+        )
+        category = response.choices[0].message.content.strip().lower()
+        print(f"🧠 GPT-mapped category: {category}")
+        return category
+    except Exception as e:
+        print("❌ GPT category detection failed:", e)
+        return "vendas"
+
 
 def is_valid_user(email: str) -> bool:
     try:
         response = supabase.auth.admin.get_user_by_email(email)
-        return response is not None and response.get("user") is not None
+        return response and response.get("user") is not None
     except Exception as e:
-        print("❌ Supabase-feil:", e)
+        print("❌ Supabase user check failed:", e)
         return False
 
-def generate_caption(topic: str, platform: str) -> str:
+
+def check_quota(email: str, platform: str) -> tuple[bool, str]:
+    try:
+        response = supabase.table("profiles").select("plan,used_captions").eq("email", email).single().execute()
+        profile = response.data
+        if not profile:
+            return False, "No profile found"
+
+        plan = profile["plan"]
+        used = profile["used_captions"]
+
+        if plan == "pro":
+            return True, "pro user"
+
+        if plan == "free":
+            if platform.lower() != "instagram":
+                return False, "Free plan supports Instagram only"
+            if used < 3:
+                return True, "free OK"
+            return False, "Free plan limit reached"
+
+        if plan == "trial":
+            if used < 10:
+                return True, "trial OK"
+            return False, "Trial credits used"
+
+        return False, "Unknown plan"
+    except Exception as e:
+        print("❌ Quota check error:", e)
+        return False, "quota error"
+
+
+def increment_caption_count(email: str) -> bool:
+    try:
+        supabase.table("profiles").update({"used_captions": supabase.functions.increment(1)}).eq("email", email).execute()
+        return True
+    except Exception as e:
+        print("❌ Increment caption error:", e)
+        return False
+
+
+def save_caption_to_supabase(email: str, caption: str, language: str, platform: str, tone: str, category: str) -> bool:
+    try:
+        supabase.table("captions").insert({
+            "email": email,
+            "caption_text": caption,
+            "language": language,
+            "platform": platform,
+            "tone": tone,
+            "category": category
+        }).execute()
+        return True
+    except Exception as e:
+        print("❌ Save caption error:", e)
+        return False
+
+
+def generate_caption(topic: str, platform: str, language: str, tone: str = "creative") -> str:
+    category = detect_category_from_topic(topic)
+    hashtags = TRENDING_HASHTAGS.get(category, ["#fyp", "#viral", "#socialtips"])
+    hashtag_str = " ".join(hashtags)
+
     prompt = f"""
-Create 3 creative and engaging social media captions designed for maximum reach and exposure.
+Create 3 scroll-stopping, creative, and highly engaging social media captions.
 
 Platform: {platform}
 Topic: {topic}
+Tone/style: {tone}
+Language: {language}
 
-Guidelines:
-- Respond in plain English text
-- Each caption must start with a number (1., 2., 3.) and be on its own line with a <br><br> between
-- Include emojis to increase engagement
-- Include powerful, **popular and relevant hashtags** for maximum discoverability
-- No introductions or explanations, just the 3 captions
-- Adapt style and tone to platform and topic:
-  • Fitness = motivational and energetic
-  • Flowers = poetic and light
-  • Sales = clear and persuasive
-  • Mental health = calm and supportive
-
-Example output:
-
-1. 💪 Ready to crush Monday? No regrets, just gains.  
-#MotivationMonday #FitGoals
-
-2. 🌸 A new week, a fresh bloom of opportunity.  
-#FlowerLover #SpringVibes
-
-3. ✨ 20% OFF today only! Your favorites just got better.  
-#DealOfTheDay #ShopSmart
-
-Each caption must be useful as-is – short, catchy, and with hashtags that help users go viral.
-
-You are a skilled social media content writer. Be creative, avoid clichés, and use high-performing tags.
+Instructions:
+- Write in {language}
+- Use tone: {tone}
+- Each caption must be unique, with a creative hook in the first 3 words
+- Add emojis that match the message
+- Each caption must be numbered (1., 2., 3.) and separated by <br><br>
+- End each caption with: "{hashtag_str}"
+- Do not explain anything — just return the captions only
+- Follow platform-specific tone and formatting:
+  • Instagram = polished, aesthetic
+  • TikTok = casual, quick, authentic
+  • Twitter = short & witty
 """
     response = openai.ChatCompletion.create(
         model="gpt-4",
@@ -64,23 +144,86 @@ You are a skilled social media content writer. Be creative, avoid clichés, and 
     )
     return response.choices[0].message.content.strip()
 
-def send_email(to_email: str, caption_text: str):
+
+def get_translated_email_content(caption: str, language: str) -> tuple[str, str]:
+    language = language.lower()
+    rating_html = """
+        <p style="margin-top:20px;"><strong>⭐ Avalie sua legenda:</strong><br>
+        <a href='https://instaprompt.ai/rate?score=1'>1⭐</a> |
+        <a href='https://instaprompt.ai/rate?score=2'>2⭐</a> |
+        <a href='https://instaprompt.ai/rate?score=3'>3⭐</a> |
+        <a href='https://instaprompt.ai/rate?score=4'>4⭐</a> |
+        <a href='https://instaprompt.ai/rate?score=5'>5⭐</a>
+        </p>
+    """
+
+    if language.startswith("port"):
+        subject = "Suas legendas estão prontas! 🚀"
+        body = f"""
+        <div style="font-family:Arial;padding:20px;">
+            <h2>🚀 Suas legendas estão prontas!</h2>
+            <p>{caption}</p>
+            <hr>
+            <p><strong>💡 Dica rápida:</strong> Copie a legenda acima e cole como descrição da sua próxima postagem no Instagram, TikTok ou LinkedIn.</p>
+            <p>📌 Use-a com uma imagem ou vídeo relacionado ao tema.</p>
+            <p>⏰ Publique nos horários de pico (como 12h ou 19h) para alcançar mais pessoas.</p>
+            {rating_html}
+            <hr>
+            <p>Obrigado por usar <strong>InstaPrompt</strong>!</p>
+        </div>
+        """
+    elif language.startswith("indo"):
+        subject = "Caption kamu sudah siap! 🚀"
+        body = f"""
+        <div style="font-family:Arial;padding:20px;">
+            <h2>🚀 Caption kamu sudah siap!</h2>
+            <p>{caption}</p>
+            <hr>
+            <p><strong>💡 Tips:</strong> Salin caption di atas dan gunakan sebagai deskripsi untuk postingan kamu berikutnya.</p>
+            <p>📌 Cocokkan dengan gambar atau video yang relevan.</p>
+            <p>⏰ Posting saat jam ramai untuk jangkauan maksimal (contoh: jam 12 atau 19).</p>
+            {rating_html}
+            <hr>
+            <p>Terima kasih telah menggunakan <strong>InstaPrompt</strong>!</p>
+        </div>
+        """
+    else:
+        subject = "Your social media captions are ready! 🚀"
+        body = f"""
+        <div style="font-family:Arial;padding:20px;">
+            <h2>🚀 Your captions are ready!</h2>
+            <p>{caption}</p>
+            <hr>
+            <p><strong>💡 Pro tip:</strong> Copy the caption above and paste it directly in your next Instagram, TikTok, or LinkedIn post.</p>
+            <p>📌 Use it with a matching image or video to boost engagement.</p>
+            <p>⏰ Best to post during peak hours (like noon or 7PM) for max reach.</p>
+            {rating_html}
+            <hr>
+            <p>Thanks for using <strong>InstaPrompt</strong>!</p>
+        </div>
+        """
+    return subject, body
+
+
+def send_email(to_email: str, caption_text: str, language: str = "engelsk"):
     try:
+        subject, html = get_translated_email_content(caption_text, language)
         message = Mail(
             from_email=os.getenv("EMAIL_FROM"),
             to_emails=to_email,
-            subject="Your social media captions are ready!",
-            html_content=f"""
-                <div style="font-family:Arial;padding:20px;">
-                    <h2>🚀 Your captions are ready!</h2>
-                    <p>{caption_text}</p>
-                    <hr>
-                    <p>Thanks for using <strong>InstaPrompt</strong>!</p>
-                </div>
-            """
+            subject=subject,
+            html_content=html,
         )
         sg = SendGridAPIClient(os.getenv("SENDGRID_API_KEY"))
-        response = sg.send(message)
-        print("📬 SendGrid status:", response.status_code)
+        sg.send(message)
     except Exception as e:
-        print("❌ SendGrid-feil:", e)
+        print("❌ Email send error:", e)
+
+
+def upgrade_plan_to_pro(email: str) -> bool:
+    try:
+        supabase.table("profiles").update({"plan": "pro"}).eq("email", email).execute()
+        return True
+    except Exception as e:
+        print("❌ Stripe upgrade error:", e)
+        return False
