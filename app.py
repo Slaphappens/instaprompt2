@@ -90,8 +90,6 @@ def webhook():
     category = detect_category_from_topic(tema)
     print("🧠 Detected category:", category)
 
-    if not is_valid_user(email):
-        return "❌ Unauthorized: Not a registered user", 403
 
     allowed, reason = check_quota(email, plattform)
     if not allowed:
