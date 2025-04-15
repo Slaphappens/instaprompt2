@@ -29,8 +29,10 @@ TRENDING_HASHTAGS = {
 
 
 def detect_category_from_topic(topic: str) -> str:
-    system_msg = "Dado o tópico abaixo, responda apenas com a categoria mais adequada da lista: " \
-                 "fitness, café, flores, vendas, marketing, moda, comida, pet, beleza, psicologia, relacionamento, viagem"
+    system_msg = (
+        "Dado o tópico abaixo, responda apenas com a categoria mais adequada da lista: "
+        "fitness, café, flores, vendas, marketing, moda, comida, pet, beleza, psicologia, relacionamento, viagem"
+    )
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4",
@@ -49,8 +51,9 @@ def detect_category_from_topic(topic: str) -> str:
 
 def is_valid_user(email: str) -> bool:
     try:
-        response = supabase.auth.admin.get_user_by_email(email)
-        return response and response.get("user") is not None
+        # fallback if get_user_by_email not available
+        result = supabase.table("profiles").select("email").eq("email", email).single().execute()
+        return result.data is not None
     except Exception as e:
         print("❌ Supabase user check failed:", e)
         return False
