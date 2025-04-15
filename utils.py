@@ -90,7 +90,7 @@ def check_quota(email: str, platform: str) -> tuple[bool, str]:
 
 def increment_caption_count(email: str) -> bool:
     try:
-        supabase.table("profiles").update({"used_captions": supabase.functions.increment(1)}).eq("email", email).execute()
+        supabase.rpc("increment_captions", {"user_email": email}).execute()
         return True
     except Exception as e:
         print("❌ Increment caption error:", e)
