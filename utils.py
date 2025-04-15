@@ -49,22 +49,14 @@ def detect_category_from_topic(topic: str) -> str:
         return "vendas"
 
 
-def is_valid_user(email: str) -> bool:
-    try:
-        # fallback if get_user_by_email not available
-        result = supabase.table("profiles").select("email").eq("email", email).single().execute()
-        return result.data is not None
-    except Exception as e:
-        print("❌ Supabase user check failed:", e)
-        return False
-
-
 def check_quota(email: str, platform: str) -> tuple[bool, str]:
     try:
         response = supabase.table("profiles").select("plan,used_captions").eq("email", email).single().execute()
         profile = response.data
         if not profile:
-            return False, "No profile found"
+            # Fallback: insert trial user
+            supabase.table("profiles").insert({"email": email, "plan": "trial", "used_captions": 0}).execute()
+            return True, "created trial user"
 
         plan = profile["plan"]
         used = profile["used_captions"]
