@@ -1,18 +1,18 @@
+# utils.py
+
 import os
-from openai import OpenAI
+import openai
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ✅ Bruk default OpenAI-klient med .api_key
-client = OpenAI()
-client.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def generate_caption(tema, plattform):
     prompt = f"Lag en engasjerende caption om {tema} for {plattform}."
-    response = client.chat.completions.create(
+    response = openai.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
     )
