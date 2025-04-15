@@ -39,6 +39,13 @@ def webhook():
         f.write(email + "\n")
 
     return render_template_string(f"<h2>Ditt resultat:</h2><p>{caption}</p>")
-    
+
+@app.route("/testmail", methods=["GET"])
+def test_email():
+    test_email_address = "din@epost.no"  # ← bytt til din testadresse
+    test_caption = "Dette er en test-caption 🚀"
+    send_email(test_email_address, test_caption)
+    return "E-post sendt (hvis alt fungerer)", 200
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)
