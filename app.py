@@ -1,5 +1,5 @@
 from flask import Flask, request, render_template_string
-from utils import generate_caption, send_email
+from utils import generate_caption, send_email, is_valid_user
 import os
 
 app = Flask(__name__)
@@ -28,6 +28,9 @@ def webhook():
 
     if not all([email, tema, plattform]):
         return "❌ Missing required fields", 400
+
+    if not is_valid_user(email):
+        return "❌ Unauthorized: not a valid Supabase user", 403
 
     if os.path.exists("used_emails.txt") and email in open("used_emails.txt").read():
         return "⚠️ Du har allerede brukt din gratis caption!", 403

@@ -4,10 +4,25 @@ import os
 import openai
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from supabase import create_client
 from dotenv import load_dotenv
 
 load_dotenv()
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Supabase init
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_ANON_KEY")
+supabase = create_client(supabase_url, supabase_key)
+
+def is_valid_user(email: str) -> bool:
+    try:
+        response = supabase.auth.admin.get_user_by_email(email)
+        return response is not None and response.get("user") is not None
+    except Exception as e:
+        print("❌ Supabase-feil:", e)
+        return False
 
 def generate_caption(topic: str, platform: str) -> str:
     prompt = f"""
@@ -43,7 +58,6 @@ Each caption must be useful as-is – short, catchy, and with hashtags that help
 
 You are a skilled social media content writer. Be creative, avoid clichés, and use high-performing tags.
 """
-
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
