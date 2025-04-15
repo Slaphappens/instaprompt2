@@ -4,13 +4,13 @@ from flask import Flask, request, render_template_string
 from utils import (
     generate_caption,
     send_email,
-    is_valid_user,
     check_quota,
     increment_caption_count,
     save_caption_to_supabase,
     upgrade_plan_to_pro,
     detect_category_from_topic,
 )
+
 import os
 import stripe
 import openai
