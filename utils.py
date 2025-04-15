@@ -1,5 +1,3 @@
-# utils.py
-
 import os
 import openai
 from sendgrid import SendGridAPIClient
@@ -28,9 +26,9 @@ TRENDING_HASHTAGS = {
 }
 
 
-def detect_category_from_topic(topic: str) -> str:
+def detect_categories_from_topic(topic: str) -> list[str]:
     system_msg = (
-        "Dado o tópico abaixo, responda apenas com a categoria mais adequada da lista: "
+        "Dado o tópico abaixo, responda com todas as categorias que se aplicam da lista, separadas por vírgula: "
         "fitness, café, flores, vendas, marketing, moda, comida, pet, beleza, psicologia, relacionamento, viagem"
     )
     try:
@@ -41,12 +39,23 @@ def detect_category_from_topic(topic: str) -> str:
                 {"role": "user", "content": topic}
             ]
         )
-        category = response.choices[0].message.content.strip().lower()
-        print(f"🧠 GPT-mapped category: {category}")
-        return category
+        categories = [c.strip().lower() for c in response.choices[0].message.content.strip().split(",")]
+        print(f"🧠 GPT-mapped categories: {categories}")
+        return categories
     except Exception as e:
         print("❌ GPT category detection failed:", e)
-        return "vendas"
+        return ["vendas"]
+
+
+def collect_hashtags(categories: list[str]) -> str:
+    tags = []
+    seen = set()
+    for c in categories:
+        for tag in TRENDING_HASHTAGS.get(c, []):
+            if tag not in seen:
+                tags.append(tag)
+                seen.add(tag)
+    return " ".join(tags[:7]) or "#fyp"
 
 
 def check_quota(email: str, platform: str) -> tuple[bool, str]:
@@ -87,7 +96,6 @@ def check_quota(email: str, platform: str) -> tuple[bool, str]:
         return False, "quota error"
 
 
-
 def increment_caption_count(email: str) -> bool:
     try:
         supabase.rpc("increment_captions", {"user_email": email}).execute()
@@ -114,9 +122,8 @@ def save_caption_to_supabase(email: str, caption: str, language: str, platform: 
 
 
 def generate_caption(topic: str, platform: str, language: str, tone: str = "creative") -> str:
-    category = detect_category_from_topic(topic)
-    hashtags = TRENDING_HASHTAGS.get(category, ["#fyp", "#viral", "#socialtips"])
-    hashtag_str = " ".join(hashtags)
+    categories = detect_categories_from_topic(topic)
+    hashtag_str = collect_hashtags(categories)
 
     prompt = f"""
 Create 3 scroll-stopping, creative, and highly engaging social media captions.
@@ -146,8 +153,11 @@ Instructions:
     return response.choices[0].message.content.strip()
 
 
-def get_translated_email_content(caption: str, language: str) -> tuple[str, str]:
+def get_translated_email_content(caption: str, language: str, topic: str = "", platform: str = "") -> tuple[str, str]:
     language = language.lower()
+    intro = f"<p>Com base no seu tema <strong>“{topic}”</strong> para <strong>{platform}</strong>, aqui estão suas legendas:</p><br>" if language.startswith("port") else \
+            f"<p>Based on your topic <strong>“{topic}”</strong> for <strong>{platform}</strong>, here are your captions:</p><br>"
+
     rating_html = """
         <p style="margin-top:20px;"><strong>⭐ Avalie sua legenda:</strong><br>
         <a href='https://instaprompt.ai/rate?score=1'>1⭐</a> |
@@ -163,6 +173,7 @@ def get_translated_email_content(caption: str, language: str) -> tuple[str, str]
         body = f"""
         <div style="font-family:Arial;padding:20px;">
             <h2>🚀 Suas legendas estão prontas!</h2>
+            {intro}
             <p>{caption}</p>
             <hr>
             <p><strong>💡 Dica rápida:</strong> Copie a legenda acima e cole como descrição da sua próxima postagem no Instagram, TikTok ou LinkedIn.</p>
@@ -173,26 +184,12 @@ def get_translated_email_content(caption: str, language: str) -> tuple[str, str]
             <p>Obrigado por usar <strong>InstaPrompt</strong>!</p>
         </div>
         """
-    elif language.startswith("indo"):
-        subject = "Caption kamu sudah siap! 🚀"
-        body = f"""
-        <div style="font-family:Arial;padding:20px;">
-            <h2>🚀 Caption kamu sudah siap!</h2>
-            <p>{caption}</p>
-            <hr>
-            <p><strong>💡 Tips:</strong> Salin caption di atas dan gunakan sebagai deskripsi untuk postingan kamu berikutnya.</p>
-            <p>📌 Cocokkan dengan gambar atau video yang relevan.</p>
-            <p>⏰ Posting saat jam ramai untuk jangkauan maksimal (contoh: jam 12 atau 19).</p>
-            {rating_html}
-            <hr>
-            <p>Terima kasih telah menggunakan <strong>InstaPrompt</strong>!</p>
-        </div>
-        """
     else:
         subject = "Your social media captions are ready! 🚀"
         body = f"""
         <div style="font-family:Arial;padding:20px;">
             <h2>🚀 Your captions are ready!</h2>
+            {intro}
             <p>{caption}</p>
             <hr>
             <p><strong>💡 Pro tip:</strong> Copy the caption above and paste it directly in your next Instagram, TikTok, or LinkedIn post.</p>
@@ -206,9 +203,9 @@ def get_translated_email_content(caption: str, language: str) -> tuple[str, str]
     return subject, body
 
 
-def send_email(to_email: str, caption_text: str, language: str = "engelsk"):
+def send_email(to_email: str, caption_text: str, language: str = "engelsk", topic: str = "", platform: str = ""):
     try:
-        subject, html = get_translated_email_content(caption_text, language)
+        subject, html = get_translated_email_content(caption_text, language, topic, platform)
         message = Mail(
             from_email=os.getenv("EMAIL_FROM"),
             to_emails=to_email,
