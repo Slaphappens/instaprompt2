@@ -6,6 +6,12 @@ from sendgrid.helpers.mail import Mail, Email
 from supabase import create_client
 from dotenv import load_dotenv
 
+import re
+import html
+import os
+import requests
+from .utils import get_translated_email_content
+
 load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -29,17 +35,29 @@ TRENDING_HASHTAGS = {
 ALLOWED_CATEGORIES = set(TRENDING_HASHTAGS.keys())
 
 
-def post_to_slack(caption_text: str, email: str, topic: str, tone: str):
+
+
+def post_to_slack(caption_text: str, email: str, topic: str, tone: str, language: str = "Português"):
     webhook_url = os.getenv("SLACK_WEBHOOK_URL")
     if not webhook_url:
         return
+
+    # Vi bruker get_translated_email_content for å hente korrekt språk
+    subject, html_body = get_translated_email_content(caption_text, language="norsk", topic=topic, platform="Instagram")
+
+    # Fjern HTML-tags
+    plain_text = re.sub(r'<[^>]+>', '', html_body)
+    plain_text = html.unescape(plain_text).strip()
+
     payload = {
-        "text": f"🧠 *Ny caption generert!*\n\n👤 {email}\n🎯 Tema: {topic}\n🎭 Tone: {tone}\n\n📄 Captions:\n{caption_text}"
+        "text": f"🧠 *Ny caption generert!*\n\n👤 {email}\n🎯 Tema: {topic}\n🎭 Tone: {tone}\n\n📄 *Innhold på norsk:*\n{plain_text}"
     }
+
     try:
         requests.post(webhook_url, json=payload, timeout=5)
     except Exception as e:
         print("❌ Slack-post feilet:", e)
+
 
 
 def detect_categories_from_topic(topic: str) -> list[str]:
@@ -167,25 +185,26 @@ def generate_caption(topic: str, platform: str, language: str, tone: str = "crea
     hashtag_str = collect_hashtags(categories)
 
     prompt = f"""
-Create 3 scroll-stopping, creative, and highly engaging social media captions.
+Você é um criador de conteúdo sênior com dom para escrever textos que tocam o coração e despertam curiosidade. Sua missão é escrever 3 legendas que inspiram, surpreendem e conectam emocionalmente — como se fossem escritas por uma alma sensível, não uma IA.
 
-Platform: {platform}
-Topic: {topic}
-Tone/style: {tone}
-Language: {language}
+Parâmetros:
+- Plataforma: {platform}
+- Tema: {topic}
+- Tom: {tone}
+- Idioma: {language}
 
-Instructions:
-- Write in {language}
-- Use tone: {tone}
-- Each caption must be unique, with a creative hook in the first 3 words
-- Add emojis that match the message
-- Each caption must be numbered (1., 2., 3.) and separated by <br><br>
-- End each caption with: "{hashtag_str}"
-- Do not explain anything — just return the captions only
-- Follow platform-specific tone and formatting:
-  • Instagram = polished, aesthetic
-  • TikTok = casual, quick, authentic
-  • Twitter = short & witty
+Regras:
+- Escreva em {language}, no estilo {tone}
+- Cada legenda deve começar com 3 palavras impactantes (gancho)
+- Use linguagem visual (metáforas, sensações)
+- Fale diretamente com o leitor (“você”)
+- Use emojis com intenção emocional, não excesso
+- Separe com <br><br> e numere 1., 2., 3.
+- Termine com: "{hashtag_str}"
+- Apenas retorne as legendas. Sem explicações.
+
+Contexto:
+Você está escrevendo como se fosse um humano com alma e sensibilidade. As pessoas que lerem isso, devem sorrir, se sentir compreendidas e inspiradas.
 """
     response = client.chat.completions.create(
         model="gpt-4",
