@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
 
 TRENDING_HASHTAGS = {
     "fitness": ["#fitnessbr", "#academia", "#vidasaudavel", "#nopainnogain", "#fyp"],
@@ -27,13 +27,13 @@ TRENDING_HASHTAGS = {
 
 ALLOWED_CATEGORIES = set(TRENDING_HASHTAGS.keys())
 
-
 def detect_categories_from_topic(topic: str) -> list[str]:
     try:
         system_msg = (
-            "Você é um classificador de tópicos. "
-            "Retorne apenas 1 palavra da lista de categorias abaixo que melhor representa o tópico: "
-            ", ".join(ALLOWED_CATEGORIES)
+            "Você é um classificador de temas de redes sociais. "
+            "Dado o tema abaixo, responda com 1 a 3 categorias separadas por vírgula da seguinte lista: \n"
+            f"{', '.join(sorted(ALLOWED_CATEGORIES))}.\n"
+            "Use apenas palavras da lista, sem explicações."
         )
         response = openai.ChatCompletion.create(
             model="gpt-4",
@@ -42,15 +42,14 @@ def detect_categories_from_topic(topic: str) -> list[str]:
                 {"role": "user", "content": topic}
             ]
         )
-        category = response.choices[0].message.content.strip().lower()
-        print(f"🧠 GPT-mapped category: {category}")
-        if category not in ALLOWED_CATEGORIES:
-            print("⚠️ Unknown category from GPT, falling back to 'vendas'")
-            return ["vendas"]
-        return [category]
+        content = response.choices[0].message.content.lower()
+        raw_categories = [c.strip() for c in content.split(",") if c.strip() in ALLOWED_CATEGORIES]
+        print(f"🧠 GPT-mapped categories: {raw_categories}")
+        return raw_categories or ["vendas"]
     except Exception as e:
-        print("❌ GPT category detection failed:", e)
+        print("❌ GPT multi-category detection failed:", e)
         return ["vendas"]
+
 
 
 def detect_tone_from_topic(topic: str, language: str = "Português") -> str:
