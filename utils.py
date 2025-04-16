@@ -1,5 +1,6 @@
 import os
 import openai
+import requests
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from supabase import create_client
@@ -26,6 +27,18 @@ TRENDING_HASHTAGS = {
 }
 
 ALLOWED_CATEGORIES = set(TRENDING_HASHTAGS.keys())
+
+def post_to_slack(caption_text: str, email: str, topic: str, tone: str):
+    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+    if not webhook_url:
+        return
+    payload = {
+        "text": f"🧠 *Ny caption generert!*\n\n👤 {email}\n🎯 Tema: {topic}\n🎭 Tone: {tone}\n\n📄 Captions:\n{caption_text}"
+    }
+    try:
+        requests.post(webhook_url, json=payload, timeout=5)
+    except Exception as e:
+        print("❌ Slack-post feilet:", e)
 
 def detect_categories_from_topic(topic: str) -> list[str]:
     try:

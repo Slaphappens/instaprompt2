@@ -10,6 +10,7 @@ from utils import (
     upgrade_plan_to_pro,
     detect_categories_from_topic,
     detect_tone_from_topic,
+    post_to_slack  # 👈 legg til denne
 )
 import os
 import stripe
@@ -95,6 +96,7 @@ def webhook():
         return f"❌ Quota limit: {reason}", 403
 
     caption = generate_caption(tema, plattform, sprak, tone)
+    post_to_slack(caption, email, tema, tone)
     send_email(email, caption, sprak, topic=tema, platform=plattform)
     save_caption_to_supabase(email, caption, sprak, plattform, tone, category[0])
     increment_caption_count(email)
