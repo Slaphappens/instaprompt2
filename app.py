@@ -122,6 +122,23 @@ def stripe_webhook():
 
     return "✅ OK", 200
 
+@app.route("/test/email", methods=["GET"])
+def test_email():
+    try:
+        test_address = request.args.get("to", "prpedersen@outlook.com")
+        send_email(
+            to_email=test_address,
+            caption_text="🚀 Test fra InstaPrompt – dette er en e-posttest",
+            language="português",
+            topic="Teste de envio",
+            platform="Instagram"
+        )
+        return f"✅ Test e-post sendt til {test_address}"
+    except Exception as e:
+        print("❌ Test e-post-feil:", e)
+        return f"❌ Feil: {e}", 500
+
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)
