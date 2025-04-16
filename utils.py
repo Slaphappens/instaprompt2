@@ -10,7 +10,6 @@ import re
 import html
 import os
 import requests
-from utils import get_translated_email_content
 
 load_dotenv()
 
