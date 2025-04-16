@@ -8,9 +8,9 @@ from utils import (
     increment_caption_count,
     save_caption_to_supabase,
     upgrade_plan_to_pro,
-    detect_category_from_topic,
+    detect_categories_from_topic,
+    detect_tone_from_topic,
 )
-
 import os
 import stripe
 import openai
@@ -85,19 +85,18 @@ def webhook():
             sprak = "English"
 
     if not tone:
-        tone = "criativo"
+        tone = detect_tone_from_topic(tema, sprak)
 
-    category = detect_category_from_topic(tema)
+    category = detect_categories_from_topic(tema)
     print("🧠 Detected category:", category)
-
 
     allowed, reason = check_quota(email, plattform)
     if not allowed:
         return f"❌ Quota limit: {reason}", 403
 
     caption = generate_caption(tema, plattform, sprak, tone)
-    send_email(email, caption, sprak)
-    save_caption_to_supabase(email, caption, sprak, plattform, tone, category)
+    send_email(email, caption, sprak, topic=tema, platform=plattform)
+    save_caption_to_supabase(email, caption, sprak, plattform, tone, category[0])
     increment_caption_count(email)
 
     return render_template_string(f"<h2>Your result:</h2><p>{caption}</p>")
