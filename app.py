@@ -10,18 +10,18 @@ from utils import (
     upgrade_plan_to_pro,
     detect_categories_from_topic,
     detect_tone_from_topic,
-    post_to_slack  # 👈 legg til denne
+    post_to_slack
 )
 import os
 import stripe
-import openai
+from openai import OpenAI
 import re
 
 app = Flask(__name__)
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def normalize(text: str) -> str:
@@ -73,7 +73,7 @@ def webhook():
 
     if not sprak:
         try:
-            detection = openai.ChatCompletion.create(
+            detection = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "Detect language of the following:"},
@@ -81,7 +81,7 @@ def webhook():
                 ]
             )
             sprak = detection.choices[0].message.content.strip().split()[0]
-            print(f"🌍 Detected language: {sprak}")
+            print(f"🌍 GPT-detected language: {sprak}")
         except:
             sprak = "English"
 
@@ -124,6 +124,7 @@ def stripe_webhook():
 
     return "✅ OK", 200
 
+
 @app.route("/test/email", methods=["GET"])
 def test_email():
     try:
@@ -139,7 +140,6 @@ def test_email():
     except Exception as e:
         print("❌ Test e-post-feil:", e)
         return f"❌ Feil: {e}", 500
-
 
 
 if __name__ == "__main__":
