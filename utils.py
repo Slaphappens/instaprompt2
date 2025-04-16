@@ -247,7 +247,7 @@ def send_email(to_email: str, caption_text: str, language: str = "engelsk", topi
     try:
         subject, html = get_translated_email_content(caption_text, language, topic, platform)
         message = Mail(
-            from_email=os.getenv("EMAIL_FROM"),
+            from_email=Email(os.getenv("EMAIL_FROM"), name="InstaPrompt"),
             to_emails=to_email,
             subject=subject,
             html_content=html,
