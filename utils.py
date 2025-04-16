@@ -1,14 +1,14 @@
 import os
-import openai
+from openai import OpenAI
 import requests
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from sendgrid.helpers.mail import Mail, Email
 from supabase import create_client
 from dotenv import load_dotenv
 
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
 
 TRENDING_HASHTAGS = {
@@ -28,6 +28,7 @@ TRENDING_HASHTAGS = {
 
 ALLOWED_CATEGORIES = set(TRENDING_HASHTAGS.keys())
 
+
 def post_to_slack(caption_text: str, email: str, topic: str, tone: str):
     webhook_url = os.getenv("SLACK_WEBHOOK_URL")
     if not webhook_url:
@@ -40,6 +41,7 @@ def post_to_slack(caption_text: str, email: str, topic: str, tone: str):
     except Exception as e:
         print("❌ Slack-post feilet:", e)
 
+
 def detect_categories_from_topic(topic: str) -> list[str]:
     try:
         system_msg = (
@@ -48,7 +50,7 @@ def detect_categories_from_topic(topic: str) -> list[str]:
             f"{', '.join(sorted(ALLOWED_CATEGORIES))}.\n"
             "Use apenas palavras da lista, sem explicações."
         )
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_msg},
@@ -64,7 +66,6 @@ def detect_categories_from_topic(topic: str) -> list[str]:
         return ["vendas"]
 
 
-
 def detect_tone_from_topic(topic: str, language: str = "Português") -> str:
     try:
         system_msg = (
@@ -72,7 +73,7 @@ def detect_tone_from_topic(topic: str, language: str = "Português") -> str:
             f"como: divertido, inspirador, profissional, emocional, criativo, ou direto. "
             f"Apenas uma palavra como resposta. Escreva em {language}."
         )
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_msg},
@@ -186,7 +187,7 @@ Instructions:
   • TikTok = casual, quick, authentic
   • Twitter = short & witty
 """
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
     )
@@ -265,24 +266,3 @@ def upgrade_plan_to_pro(email: str) -> bool:
     except Exception as e:
         print("❌ Stripe upgrade error:", e)
         return False
-
-def detect_tone_from_topic(topic: str, language: str = "português") -> str:
-    system_msg = (
-        "Você é um assistente de marketing. "
-        "Dado um tema de postagem em rede social, responda apenas com o estilo de tom mais adequado: "
-        "divertido, profissional, inspirador, informativo, casual, provocador, poético"
-    )
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": topic}
-            ]
-        )
-        tone = response.choices[0].message.content.strip().lower()
-        print(f"🎯 GPT-suggested tone: {tone}")
-        return tone
-    except Exception as e:
-        print("❌ Tone detection failed:", e)
-        return "criativo"
