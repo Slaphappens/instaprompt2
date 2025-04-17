@@ -162,9 +162,9 @@ def check_quota(email: str, platform: str) -> tuple[bool, str, str]:
         return False, "❌ Systemfeil i kvotekontroll", "unknown"
 
 
-def increment_caption_count(email: str) -> bool:
+def increment_caption_count(email: str, count: int = 1) -> bool:
     try:
-        supabase.rpc("increment_captions", {"user_email": email}).execute()
+        supabase.rpc("increment_captions", {"user_email": email, "count": count}).execute()
         return True
     except Exception as e:
         print("❌ Increment caption error:", e)

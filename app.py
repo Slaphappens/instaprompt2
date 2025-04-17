@@ -102,7 +102,7 @@ def webhook():
     post_to_slack(caption, email, tema, tone, plan, sprak)
     send_email(email, caption, sprak, topic=tema, platform=plattform)
     save_caption_to_supabase(email, caption, sprak, plattform, tone, category[0], caption_id)
-    increment_caption_count(email)
+    increment_caption_count(email, count=3)
     
 
     return render_template_string(f"<h2>Your result:</h2><p>{caption}</p>")
