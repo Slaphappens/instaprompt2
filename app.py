@@ -148,25 +148,28 @@ def test_email():
         print("❌ Test e-post-feil:", e)
         return f"❌ Feil: {e}", 500
 
-@app.route("/create-checkout-session", methods=["POST"])
-def create_checkout_session():
+@app.route("/stripe/checkout", methods=["GET"])
+def stripe_checkout():
     try:
-        checkout_session = stripe.checkout.Session.create(
+        success_url = os.getenv("DOMAIN") + "/sucesso"
+        cancel_url = os.getenv("DOMAIN") + "/cancelado"
+
+        session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             mode="subscription",
-            line_items=[
-                {
-                    "price": "price_1REnHoEIpiF3EYvU4B9H3SRq",
-                    "quantity": 1,
-                }
-            ],
-            success_url=os.getenv("DOMAIN") + "/success",
-            cancel_url=os.getenv("DOMAIN") + "/cancel",
+            line_items=[{
+                "price": "price_1REnHoEIpiF3EYvU4B9H3SRq",
+                "quantity": 1,
+            }],
+            success_url=success_url,
+            cancel_url=cancel_url,
         )
-        return redirect(checkout_session.url, code=303)
+        return redirect(session.url, code=303)
+
     except Exception as e:
-        print("❌ Stripe error:", e)
-        return str(e), 400
+        print("❌ Stripe checkout error:", e)
+        return f"❌ Stripe-feil: {e}", 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)
