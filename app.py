@@ -1,6 +1,7 @@
 # app.py
 
 from flask import Flask, request, render_template_string
+from flask import redirect
 from utils import (
     generate_caption,
     send_email,
@@ -147,6 +148,25 @@ def test_email():
         print("❌ Test e-post-feil:", e)
         return f"❌ Feil: {e}", 500
 
+@app.route("/create-checkout-session", methods=["POST"])
+def create_checkout_session():
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            mode="subscription",
+            line_items=[
+                {
+                    "price": "price_1REnHoEIpiF3EYvU4B9H3SRq",
+                    "quantity": 1,
+                }
+            ],
+            success_url=os.getenv("DOMAIN") + "/success",
+            cancel_url=os.getenv("DOMAIN") + "/cancel",
+        )
+        return redirect(checkout_session.url, code=303)
+    except Exception as e:
+        print("❌ Stripe error:", e)
+        return str(e), 400
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)
