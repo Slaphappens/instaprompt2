@@ -16,6 +16,7 @@ import os
 import stripe
 from openai import OpenAI
 import re
+import uuid
 
 app = Flask(__name__)
 
@@ -91,17 +92,22 @@ def webhook():
     category = detect_categories_from_topic(tema)
     print("🧠 Detected category:", category)
 
-    allowed, reason = check_quota(email, plattform)
+    allowed, reason, plan = check_quota(email, plattform)
     if not allowed:
-        return f"❌ Quota limit: {reason}", 403
+        return reason, 403
 
-    caption = generate_caption(tema, plattform, sprak, tone)
-    post_to_slack(caption, email, tema, tone, sprak)
+    caption_id = str(uuid.uuid4())
+
+    caption = generate_caption(tema, plattform, sprak, tone, plan)
+    post_to_slack(caption, email, tema, tone, plan, sprak)
     send_email(email, caption, sprak, topic=tema, platform=plattform)
-    save_caption_to_supabase(email, caption, sprak, plattform, tone, category[0])
+    save_caption_to_supabase(email, caption, sprak, plattform, tone, category[0], caption_id)
     increment_caption_count(email)
+    
 
     return render_template_string(f"<h2>Your result:</h2><p>{caption}</p>")
+
+
 
 
 @app.route("/stripe/webhook", methods=["POST"])
@@ -144,3 +150,24 @@ def test_email():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)
+
+
+@app.route("/rate", methods=["GET"])
+def rate_caption():
+    email = request.args.get("email")
+    score = request.args.get("score")
+    caption_id = request.args.get("id")
+
+    if not all([email, score, caption_id]):
+        return "❌ Mangler informasjon", 400
+
+    try:
+        supabase.table("ratings").insert({
+            "email": email,
+            "caption_id": caption_id,
+            "score": int(score)
+        }).execute()
+        return f"⭐ Takk for din vurdering ({score} stjerner)!"
+    except Exception as e:
+        print("❌ Feil ved rating:", e)
+        return "❌ Klarte ikke å registrere vurdering", 500

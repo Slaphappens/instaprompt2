@@ -36,26 +36,32 @@ ALLOWED_CATEGORIES = set(TRENDING_HASHTAGS.keys())
 
 
 
-def post_to_slack(caption_text: str, email: str, topic: str, tone: str, language: str = "Português"):
+def post_to_slack(caption_text: str, email: str, topic: str, tone: str, plan: str = "free", language: str = "Português"):
     webhook_url = os.getenv("SLACK_WEBHOOK_URL")
     if not webhook_url:
         return
 
-    # Vi bruker get_translated_email_content for å hente korrekt språk
-    subject, html_body = get_translated_email_content(caption_text, language="norsk", topic=topic, platform="Instagram")
+    # 🟢🟡🔴 Plan tags
+    plan_tag = {
+        "pro": "🟢 PRO",
+        "trial": "🟡 Trial",
+        "free": "🔴 Free"
+    }.get(plan, "⚪ Unknown")
 
-    # Fjern HTML-tags
-    plain_text = re.sub(r'<[^>]+>', '', html_body)
-    plain_text = html.unescape(plain_text).strip()
+    # Oversatt epostinnhold
+    subject, html_body = get_translated_email_content(caption_text, language, topic, "Instagram")
+
+    plain_text = re.sub(r'<[^>]+>', '', html_body).replace("&nbsp;", " ").strip()
 
     payload = {
-        "text": f"🧠 *Ny caption generert!*\n\n👤 {email}\n🎯 Tema: {topic}\n🎭 Tone: {tone}\n\n📄 *Innhold på norsk:*\n{plain_text}"
+        "text": f"{plan_tag} *Ny caption generert!*\n\n👤 {email}\n🎯 Tema: {topic}\n🎭 Tone: {tone}\n\n📄 *Innhold:*\n{plain_text}"
     }
 
     try:
         requests.post(webhook_url, json=payload, timeout=5)
     except Exception as e:
         print("❌ Slack-post feilet:", e)
+
 
 
 
@@ -116,42 +122,44 @@ def collect_hashtags(categories: list[str]) -> str:
     return " ".join(tags[:7]) or "#fyp"
 
 
-def check_quota(email: str, platform: str) -> tuple[bool, str]:
+def check_quota(email: str, platform: str) -> tuple[bool, str, str]:
     try:
-        response = supabase.table("profiles").select("plan,used_captions").eq("email", email).execute()
+        response = supabase.table("profiles").select("plan, used_captions").eq("email", email).execute()
         data = response.data or []
 
-        if len(data) == 0:
+        if not data:
+            # Automatisk registrer ny bruker som "trial"
             supabase.table("profiles").insert({
                 "email": email,
                 "plan": "trial",
                 "used_captions": 0
             }).execute()
-            return True, "created trial user"
+            return True, "✅ Ny bruker – 10 captions tilgjengelig", "trial"
 
         profile = data[0]
         plan = profile["plan"]
         used = profile["used_captions"]
 
         if plan == "pro":
-            return True, "pro user"
-
-        if plan == "free":
-            if platform.lower() != "instagram":
-                return False, "Free plan supports Instagram only"
-            if used < 3:
-                return True, "free OK"
-            return False, "Free plan limit reached"
+            return True, "✅ Ubegrenset tilgang", "pro"
 
         if plan == "trial":
             if used < 10:
-                return True, "trial OK"
-            return False, "Trial credits used"
+                return True, f"✅ Trial – {10 - used} igjen", "trial"
+            return False, "⛔ Du har brukt alle 10 captions i testen", "trial"
 
-        return False, "Unknown plan"
+        if plan == "free":
+            if platform.lower() != "instagram":
+                return False, "⛔ Gratis-brukere kan kun generere for Instagram", "free"
+            if used < 3:
+                return True, f"✅ Gratis – {3 - used} igjen", "free"
+            return False, "⛔ Du har brukt opp dine 3 captions for gratisversjonen", "free"
+
+        return False, "❌ Ugyldig abonnementstype", plan
+
     except Exception as e:
-        print("❌ Quota check error:", e)
-        return False, "quota error"
+        print("❌ Feil i kvotesjekk:", e)
+        return False, "❌ Systemfeil i kvotekontroll", "unknown"
 
 
 def increment_caption_count(email: str) -> bool:
@@ -163,9 +171,10 @@ def increment_caption_count(email: str) -> bool:
         return False
 
 
-def save_caption_to_supabase(email: str, caption: str, language: str, platform: str, tone: str, category: str) -> bool:
+def save_caption_to_supabase(email: str, caption: str, language: str, platform: str, tone: str, category: str, caption_id: str) -> bool:
     try:
         supabase.table("captions").insert({
+            "id": caption_id,
             "email": email,
             "caption_text": caption,
             "language": language,
@@ -179,12 +188,14 @@ def save_caption_to_supabase(email: str, caption: str, language: str, platform: 
         return False
 
 
-def generate_caption(topic: str, platform: str, language: str, tone: str = "creative") -> str:
+
+def generate_caption(topic: str, platform: str, language: str, tone: str = "creative", plan: str = "free") -> str:
     categories = detect_categories_from_topic(topic)
     hashtag_str = collect_hashtags(categories)
 
-    prompt = f"""
-Você é um criador de conteúdo sênior com dom para escrever textos que tocam o coração e despertam curiosidade. Sua missão é escrever 3 legendas que inspiram, surpreendem e conectam emocionalmente — como se fossem escritas por uma alma sensível, não uma IA.
+    if plan in ["pro", "trial"]:
+        prompt = f"""
+Você é um criador de conteúdo sênior com talento para escrever legendas que emocionam, surpreendem e criam conexão. Escreva 3 legendas únicas e criativas, como se fossem escritas por uma pessoa com alma.
 
 Parâmetros:
 - Plataforma: {platform}
@@ -193,23 +204,41 @@ Parâmetros:
 - Idioma: {language}
 
 Regras:
-- Escreva em {language}, no estilo {tone}
-- Cada legenda deve começar com 3 palavras impactantes (gancho)
-- Use linguagem visual (metáforas, sensações)
-- Fale diretamente com o leitor (“você”)
-- Use emojis com intenção emocional, não excesso
+- Escreva em {language}, com estilo {tone}
+- Comece cada legenda com 3 palavras impactantes
+- Use linguagem visual e emocional
+- Use emojis com intenção, sem exagero
+- Fale diretamente com “você”
 - Separe com <br><br> e numere 1., 2., 3.
 - Termine com: "{hashtag_str}"
 - Apenas retorne as legendas. Sem explicações.
-
-Contexto:
-Você está escrevendo como se fosse um humano com alma e sensibilidade. As pessoas que lerem isso, devem sorrir, se sentir compreendidas e inspiradas.
 """
+    else:
+        prompt = f"""
+Escreva 3 legendas simples e úteis para redes sociais baseadas no seguinte tema:
+
+Plataforma: {platform}
+Tema: {topic}
+Tom: {tone}
+Idioma: {language}
+
+Instruções:
+- Escreva em {language}
+- Estilo direto e curto
+- Use emojis com moderação
+- Numere como 1., 2., 3., e separe com <br><br>
+- Finalize com: "{hashtag_str}"
+- Sem explicações ou comentários
+"""
+
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content.strip()
+        
+           
+
 
 
 def get_translated_email_content(caption: str, language: str, topic: str = "", platform: str = "") -> tuple[str, str]:
