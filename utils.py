@@ -262,7 +262,7 @@ def get_translated_email_content(caption: str, language: str, topic: str = "", p
         <div style="font-family:Arial;padding:20px;">
             <h2>🚀 Suas legendas estão prontas!</h2>
             {intro}
-            <p>{caption}</p>
+            {"<br>".join(f"<p>{line.strip()}</p>" for line in caption.split("<br><br>"))}
             <hr>
             <p><strong>💡 Dica rápida:</strong> Copie a legenda acima e cole como descrição da sua próxima postagem.</p>
             <p>📌 Combine com uma imagem ou vídeo relevante.</p>
