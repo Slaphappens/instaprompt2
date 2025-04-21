@@ -18,12 +18,17 @@ import stripe
 from openai import OpenAI
 import re
 import uuid
+from supabase import create_client
 
 app = Flask(__name__)
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def normalize(text: str) -> str:
@@ -175,7 +180,7 @@ def stripe_checkout():
     try:
         DOMAIN = os.getenv("DOMAIN")
         success_url = DOMAIN + "/sucesso"
-        cancel_url = DOMAIN + "/cancelado"
+        cancel_url = DOMAIN + "/cancelled"
 
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -197,7 +202,7 @@ def stripe_checkout():
 @app.route("/stripe/trial-checkout", methods=["GET"])
 def trial_checkout():
     try:
-        DOMAIN = os.getenv("DOMAIN")  # ← FIX lagt til her
+        DOMAIN = os.getenv("DOMAIN")
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             mode="payment",
@@ -211,10 +216,6 @@ def trial_checkout():
         return redirect(session.url, code=303)
     except Exception as e:
         return f"Stripe-feil: {e}", 400
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=3000)
 
 
 @app.route("/rate", methods=["GET"])
@@ -237,6 +238,7 @@ def rate_caption():
         print("❌ Feil ved rating:", e)
         return "❌ Klarte ikke å registrere vurdering", 500
 
+
 @app.route("/thanks", methods=["GET"])
 def thanks():
     plan = request.args.get("plan", "desconhecido")
@@ -246,13 +248,13 @@ def thanks():
             <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
                 <h1>🎉 Pagamento confirmado!</h1>
                 <p>Você ativou o plano <strong>{plan.upper()}</strong> no InstaPrompt.</p>
-                <p>Comece a criar legendas agora mesmo:</p>
                 <a href="https://tally.so/r/waljyy" style="margin-top: 2rem; display: inline-block; background: #7B61FF; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
                     Abrir formulário
                 </a>
             </body>
         </html>
     """)
+
 
 @app.route("/cancelled", methods=["GET"])
 def cancelled():
@@ -262,13 +264,13 @@ def cancelled():
             <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
                 <h1>🛑 Pagamento cancelado</h1>
                 <p>Não se preocupe – nenhum valor foi cobrado 😉</p>
-                <p>Se você quiser tentar novamente, clique no botão abaixo:</p>
                 <a href="https://instaprompt2-production.up.railway.app/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #E63946; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
                     Tentar novamente
                 </a>
             </body>
         </html>
     """)
+
 
 @app.route("/sucesso", methods=["GET"])
 def sucesso():
@@ -284,3 +286,7 @@ def sucesso():
             </body>
         </html>
     """)
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=3000)
