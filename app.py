@@ -288,22 +288,6 @@ def thanks():
         </html>
     """)
 
-@app.route("/sucesso", methods=["GET"])
-def sucesso():
-    return render_template_string("""
-        <html>
-            <head><title>InstaPrompt – Sucesso</title></head>
-            <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
-                <h1>✅ Pagamento com sucesso!</h1>
-                <p>Seu plano PRO foi ativado 💜</p>
-                <p>Use agora o formulário para gerar suas legendas:</p>
-                <a href="https://tally.so/r/waljyy" style="margin-top: 2rem; display: inline-block; background: #00B37E; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
-                    Criar legendas
-                </a>
-            </body>
-        </html>
-    """)
-
 @app.route("/cancelled", methods=["GET"])
 def cancelled():
     return render_template_string("""
