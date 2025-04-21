@@ -303,3 +303,19 @@ def sucesso():
             </body>
         </html>
     """)
+
+@app.route("/cancelled", methods=["GET"])
+def cancelled():
+    return render_template_string("""
+        <html>
+            <head><title>InstaPrompt – Pagamento cancelado</title></head>
+            <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
+                <h1>🛑 Pagamento cancelado</h1>
+                <p>Não se preocupe – nenhum valor foi cobrado 😉</p>
+                <p>Se você quiser tentar novamente, clique no botão abaixo:</p>
+                <a href="https://instaprompt2-production.up.railway.app/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #E63946; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
+                    Tentar novamente
+                </a>
+            </body>
+        </html>
+    """)
