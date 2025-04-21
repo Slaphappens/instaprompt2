@@ -239,40 +239,6 @@ def rate_caption():
 
 @app.route("/thanks", methods=["GET"])
 def thanks():
-    plan = request.args.get("plan", "ukjent")
-    return render_template_string(f"""
-        <html>
-            <head><title>InstaPrompt - Betaling fullført</title></head>
-            <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
-                <h1>🎉 Takk for kjøpet!</h1>
-                <p>Du har aktivert <strong>{plan.upper()}</strong>-planen din på InstaPrompt.</p>
-                <p>Gå tilbake til skjemaet og begynn å generere captions med en gang 💡</p>
-                <a href="https://tally.so/r/waljyy" style="margin-top: 2rem; display: inline-block; background: #7B61FF; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
-                    Start å generere nå
-                </a>
-            </body>
-        </html>
-    """)
-
-
-@app.route("/cancelled", methods=["GET"])
-def cancelled():
-    return render_template_string("""
-        <html>
-            <head><title>InstaPrompt - Betaling avbrutt</title></head>
-            <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
-                <h1>⛔️ Betaling avbrutt</h1>
-                <p>Ingen penger ble trukket, og kontoen din er uendret.</p>
-                <p>Du kan prøve på nytt når du er klar.</p>
-                <a href="https://instaprompt2-production.up.railway.app/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #E63946; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
-                    Prøv igjen
-                </a>
-            </body>
-        </html>
-    """)
-
-@app.route("/thanks", methods=["GET"])
-def thanks():
     plan = request.args.get("plan", "desconhecido")
     return render_template_string(f"""
         <html>
@@ -299,6 +265,21 @@ def cancelled():
                 <p>Se você quiser tentar novamente, clique no botão abaixo:</p>
                 <a href="https://instaprompt2-production.up.railway.app/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #E63946; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
                     Tentar novamente
+                </a>
+            </body>
+        </html>
+    """)
+
+@app.route("/sucesso", methods=["GET"])
+def sucesso():
+    return render_template_string("""
+        <html>
+            <head><title>InstaPrompt – Sucesso</title></head>
+            <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
+                <h1>✅ Pagamento com sucesso!</h1>
+                <p>Seu plano PRO foi ativado 💜</p>
+                <a href="https://tally.so/r/waljyy" style="margin-top: 2rem; display: inline-block; background: #00B37E; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
+                    Criar legendas
                 </a>
             </body>
         </html>
