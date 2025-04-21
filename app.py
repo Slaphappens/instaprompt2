@@ -104,11 +104,8 @@ def webhook():
     send_email(email, caption, sprak, topic=tema, platform=plattform)
     save_caption_to_supabase(email, caption, sprak, plattform, tone, category[0], caption_id)
     increment_caption_count(email, count=3)
-    
 
     return render_template_string(f"<h2>Your result:</h2><p>{caption}</p>")
-
-
 
 
 @app.route("/stripe/webhook", methods=["POST"])
@@ -129,7 +126,31 @@ def stripe_webhook():
             upgrade_plan_to_pro(customer_email)
             print(f"✅ Upgraded {customer_email} to PRO")
 
+        elif session.get("mode") == "payment":
+            supabase.table("profiles").upsert({
+                "email": customer_email,
+                "plan": "trial",
+                "used_captions": 0
+            }).execute()
+            print(f"🧪 Trial aktivert for {customer_email}")
+
     return "✅ OK", 200
+
+
+@app.route("/stripe/customer-portal", methods=["GET"])
+def stripe_customer_portal():
+    try:
+        email = request.args.get("email")
+        customer_id = "cus_xxxxxx"  # TODO: hent riktig ID basert på epost
+
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=os.getenv("DOMAIN")
+        )
+        return redirect(session.url)
+    except Exception as e:
+        print("❌ Stripe-portal-feil:", e)
+        return "❌ Klarte ikke å åpne portal", 400
 
 
 @app.route("/test/email", methods=["GET"])
@@ -148,11 +169,13 @@ def test_email():
         print("❌ Test e-post-feil:", e)
         return f"❌ Feil: {e}", 500
 
+
 @app.route("/stripe/checkout", methods=["GET"])
 def stripe_checkout():
     try:
-        success_url = os.getenv("DOMAIN") + "/sucesso"
-        cancel_url = os.getenv("DOMAIN") + "/cancelado"
+        DOMAIN = os.getenv("DOMAIN")
+        success_url = DOMAIN + "/sucesso"
+        cancel_url = DOMAIN + "/cancelado"
 
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -169,6 +192,25 @@ def stripe_checkout():
     except Exception as e:
         print("❌ Stripe checkout error:", e)
         return f"❌ Stripe-feil: {e}", 500
+
+
+@app.route("/stripe/trial-checkout", methods=["GET"])
+def trial_checkout():
+    try:
+        DOMAIN = os.getenv("DOMAIN")  # ← FIX lagt til her
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            mode="payment",
+            line_items=[{
+                "price": "price_1REnGgEIpiF3EYvU2uadaWDS",
+                "quantity": 1,
+            }],
+            success_url=f"{DOMAIN}/thanks?plan=trial",
+            cancel_url=f"{DOMAIN}/cancelled",
+        )
+        return redirect(session.url, code=303)
+    except Exception as e:
+        return f"Stripe-feil: {e}", 400
 
 
 if __name__ == "__main__":
