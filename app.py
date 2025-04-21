@@ -181,7 +181,7 @@ def stripe_checkout():
             payment_method_types=["card"],
             mode="subscription",
             line_items=[{
-                "price": "price_1REnHoEIpiF3EYvU4B9H3SRq",
+                "price": os.getenv("STRIPE_PRICE_PRO"),
                 "quantity": 1,
             }],
             success_url=success_url,
@@ -202,7 +202,7 @@ def trial_checkout():
             payment_method_types=["card"],
             mode="payment",
             line_items=[{
-                "price": "price_1REnGgEIpiF3EYvU2uadaWDS",
+                "price": os.getenv("STRIPE_PRICE_TRIAL"),
                 "quantity": 1,
             }],
             success_url=f"{DOMAIN}/thanks?plan=trial",
