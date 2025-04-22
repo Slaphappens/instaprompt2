@@ -100,7 +100,19 @@ def webhook():
 
     allowed, reason, plan = check_quota(email, plattform)
     if not allowed:
-        return reason, 403
+        return render_template_string("""
+            <html>
+                <head><title>Limite atingido</title></head>
+                <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
+                    <h1>🚫 Você atingiu seu limite</h1>
+                    <p>Seu plano gratuito foi usado. Para continuar gerando legendas com IA, ative o plano PRO abaixo:</p>
+                    <a href="https://www.instaprompt.eu/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #7B61FF; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
+                    Ativar PRO agora
+                </a>
+            </body>
+        </html>
+    """), 403
+
 
     caption_id = str(uuid.uuid4())
 
@@ -126,10 +138,16 @@ def stripe_webhook():
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         customer_email = session["customer_details"]["email"]
+        customer_id = session.get("customer")
 
         if session.get("mode") == "subscription":
-            upgrade_plan_to_pro(customer_email)
-            print(f"✅ Upgraded {customer_email} to PRO")
+            supabase.table("profiles").upsert({
+                "email": customer_email,
+                "plan": "pro",
+                "stripe_customer_id": customer_id
+            }).execute()
+            print(f"✅ PRO aktivert for {customer_email}")
+
 
         elif session.get("mode") == "payment":
             supabase.table("profiles").upsert({
@@ -146,16 +164,25 @@ def stripe_webhook():
 def stripe_customer_portal():
     try:
         email = request.args.get("email")
-        customer_id = "cus_xxxxxx"  # TODO: hent riktig ID basert på epost
+
+        if not email:
+            return "❌ E-mail é obrigatório", 400
+
+        result = supabase.table("profiles").select("stripe_customer_id").eq("email", email).single().execute()
+        customer_id = result.data.get("stripe_customer_id")
+
+        if not customer_id:
+            return "❌ Cliente não encontrado", 404
 
         session = stripe.billing_portal.Session.create(
             customer=customer_id,
             return_url=os.getenv("DOMAIN")
         )
         return redirect(session.url)
+
     except Exception as e:
-        print("❌ Stripe-portal-feil:", e)
-        return "❌ Klarte ikke å åpne portal", 400
+        print("❌ Erro no portal do cliente:", e)
+        return f"❌ Falha ao abrir portal: {e}", 400
 
 
 @app.route("/test/email", methods=["GET"])
@@ -264,7 +291,7 @@ def cancelled():
             <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
                 <h1>🛑 Pagamento cancelado</h1>
                 <p>Não se preocupe – nenhum valor foi cobrado 😉</p>
-                <a href="https://instaprompt2-production.up.railway.app/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #E63946; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
+                <a href="https://www.instaprompt.eu/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #E63946; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
                     Tentar novamente
                 </a>
             </body>
@@ -286,6 +313,36 @@ def sucesso():
             </body>
         </html>
     """)
+
+@app.route("/verificar", methods=["GET"])
+def verificar():
+    email = request.args.get("email")
+
+    if not email:
+        return "❌ E-post mangler", 400
+
+    try:
+        result = supabase.table("profiles").select("plan").eq("email", email).single().execute()
+        plan = result.data.get("plan") if result.data else None
+
+        if plan == "pro":
+            return redirect("https://tally.so/r/waljyy", code=302)
+
+        return render_template_string("""
+            <html>
+                <head><title>Acesso PRO necessário</title></head>
+                <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
+                    <h1>🔒 Acesso restrito</h1>
+                    <p>Para acessar esse formulário, você precisa do plano PRO.</p>
+                    <a href="/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #7B61FF; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
+                        Ativar plano PRO
+                    </a>
+                </body>
+            </html>
+        """)
+    except Exception as e:
+        print("❌ Erro na verificação:", e)
+        return "❌ Ocorreu um erro interno", 500
 
 
 if __name__ == "__main__":
