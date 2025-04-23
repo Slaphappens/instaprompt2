@@ -5,3 +5,4 @@ supabase
 sendgrid
 requests
 stripe
+gunicorn
