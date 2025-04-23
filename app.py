@@ -44,6 +44,10 @@ def find_field(fields: dict, *candidates: str):
             return normalized_fields[norm_label]
     return None
 
+@app.route("/ping")
+def ping():
+    return "pong", 200
+
 
 @app.route("/", methods=["GET"])
 def health():
