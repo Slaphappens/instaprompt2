@@ -1,6 +1,7 @@
 # app.py
 # Trigger deploy - 2025-04-22
-
+from threading import Thread
+from flask import request, render_template_string
 from flask import Flask, request, render_template_string
 from flask import redirect
 from utils import (
@@ -61,73 +62,96 @@ def webhook():
     try:
         data = request.get_json(force=True)
         print("🔍 Payload:", data)
+        Thread(target=handle_submission, args=(data,)).start()
+        return "OK", 200
     except Exception as e:
         return f"❌ Invalid JSON: {e}", 400
 
+def handle_submission(data):
     try:
-        fields = {f["label"]: f["value"] for f in data["data"]["fields"]}
+        fields = {f["label"].strip(): f["value"] for f in data["data"]["fields"]}
         email = find_field(fields, "Qual é o seu endereço de e-mail?", "Email")
         tema = find_field(fields, "Sobre o que é a sua postagem?", "Post topic")
         plattform = find_field(fields, "Para qual plataforma é essa legenda?", "Platform")
         sprak = find_field(fields, "Em qual idioma você quer a legenda?", "Language")
         tone = find_field(fields, "Escolha um estilo de tom", "Choose a tone/style")
 
+        # Nye felt – alle fritekst
+        goal = find_field(fields, "Qual é o objetivo da sua postagem?")
+        audience = find_field(fields, "Quem é o público da sua postagem?")
+        emoji_preference = find_field(fields, "Como você prefere usar emojis?")
+        style = find_field(fields, "Há algum estilo que você prefere?")
+
         print("🧪 email:", email)
         print("🧪 tema:", tema)
         print("🧪 plattform:", plattform)
         print("🧪 sprak:", sprak)
         print("🧪 tone:", tone)
+
+        if not all([email, tema, plattform]):
+            print("❌ Missing required fields")
+            return
+
+        if not sprak:
+            try:
+                detection = client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "Detect language of the following:"},
+                        {"role": "user", "content": tema}
+                    ]
+                )
+                sprak = detection.choices[0].message.content.strip().split()[0]
+                print(f"🌍 GPT-detected language: {sprak}")
+            except:
+                sprak = "Português"
+
+        if not tone:
+            tone = detect_tone_from_topic(tema, sprak)
+
+        category = detect_categories_from_topic(tema)
+        print("🧠 Detected category:", category)
+
+        allowed, reason, plan = check_quota(email, plattform)
+        if not allowed:
+            html = render_template_string("""
+                <html>
+                    <head><title>Limite atingido</title></head>
+                    <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
+                        <h1>🚫 Você atingiu seu limite</h1>
+                        <p>Seu plano gratuito foi usado. Para continuar gerando legendas com IA, ative o plano PRO abaixo:</p>
+                        <a href="https://www.instaprompt.eu/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #7B61FF; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
+                        Ativar PRO agora
+                        </a>
+                    </body>
+                </html>
+            """)
+            print("🛑 Bruker nådde kvote")
+            return html  # svarer ikke HTTP direkte, men logger i backend
+
+        caption_id = str(uuid.uuid4())
+
+        caption = generate_caption(
+            tema,
+            plattform,
+            sprak,
+            tone,
+            plan,
+            goal or "engajamento",
+            audience or "seguidores",
+            emoji_preference or "sim",
+            style or "livre"
+        )
+
+        post_to_slack(caption, email, tema, tone, plan, sprak)
+        send_email(email, caption, sprak, topic=tema, platform=plattform)
+        save_caption_to_supabase(email, caption, sprak, plattform, tone, category[0], caption_id)
+        increment_caption_count(email, count=3)
+
+        print("✅ Caption sendt!")
+
     except Exception as e:
-        return f"❌ Malformed fields: {e}", 400
-
-    if not all([email, tema, plattform]):
-        return "❌ Missing required fields", 400
-
-    if not sprak:
-        try:
-            detection = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "Detect language of the following:"},
-                    {"role": "user", "content": tema}
-                ]
-            )
-            sprak = detection.choices[0].message.content.strip().split()[0]
-            print(f"🌍 GPT-detected language: {sprak}")
-        except:
-            sprak = "English"
-
-    if not tone:
-        tone = detect_tone_from_topic(tema, sprak)
-
-    category = detect_categories_from_topic(tema)
-    print("🧠 Detected category:", category)
-
-    allowed, reason, plan = check_quota(email, plattform)
-    if not allowed:
-        return render_template_string("""
-            <html>
-                <head><title>Limite atingido</title></head>
-                <body style="font-family: sans-serif; padding: 3rem; text-align: center;">
-                    <h1>🚫 Você atingiu seu limite</h1>
-                    <p>Seu plano gratuito foi usado. Para continuar gerando legendas com IA, ative o plano PRO abaixo:</p>
-                    <a href="https://www.instaprompt.eu/stripe/checkout" style="margin-top: 2rem; display: inline-block; background: #7B61FF; color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none;">
-                    Ativar PRO agora
-                </a>
-            </body>
-        </html>
-    """), 403
-
-
-    caption_id = str(uuid.uuid4())
-
-    caption = generate_caption(tema, plattform, sprak, tone, plan)
-    post_to_slack(caption, email, tema, tone, plan, sprak)
-    send_email(email, caption, sprak, topic=tema, platform=plattform)
-    save_caption_to_supabase(email, caption, sprak, plattform, tone, category[0], caption_id)
-    increment_caption_count(email, count=3)
-
-    return render_template_string(f"<h2>Your result:</h2><p>{caption}</p>")
+        print("❌ Feil i handle_submission:", e)
 
 
 @app.route("/stripe/webhook", methods=["POST"])
