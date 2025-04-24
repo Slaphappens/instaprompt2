@@ -1,5 +1,8 @@
-Flask==2.3.3
-openai==0.28.1
-sendgrid==6.11.0
-python-dotenv==1.1.0
+flask
+openai>=1.0.0
+python-dotenv
 supabase
+sendgrid
+requests
+stripe
+gunicorn
