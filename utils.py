@@ -189,47 +189,56 @@ def save_caption_to_supabase(email: str, caption: str, language: str, platform: 
 
 
 
-def generate_caption(topic: str, platform: str, language: str, tone: str = "creative", plan: str = "free") -> str:
+def generate_caption(
+    topic: str,
+    platform: str,
+    language: str,
+    tone: str = "creative",
+    plan: str = "free",
+    goal: str = "engajamento",
+    audience: str = "seguidores",
+    emoji_preference: str = "sim",
+    style: str = "livre"
+) -> str:
     categories = detect_categories_from_topic(topic)
     hashtag_str = collect_hashtags(categories)
 
     if plan in ["pro", "trial"]:
         prompt = f"""
-Você é um criador de conteúdo sênior com talento para escrever legendas que emocionam, surpreendem e criam conexão. Escreva 3 legendas únicas e criativas, como se fossem escritas por uma pessoa com alma.
+    Você é um especialista em marketing digital que escreve legendas impactantes para {platform}. Crie 3 legendas diferentes para o tema "{topic}" com estilo {tone} e idioma {language}.
 
-Parâmetros:
-- Plataforma: {platform}
-- Tema: {topic}
-- Tom: {tone}
-- Idioma: {language}
+    - Objetivo: {goal}
+    - Público-alvo: {audience}
+    - Emojis: {emoji_preference}
+    - Estilo desejado: {style}
 
-Regras:
-- Escreva em {language}, com estilo {tone}
-- Comece cada legenda com 3 palavras impactantes
-- Use linguagem visual e emocional
-- Use emojis com intenção, sem exagero
-- Fale diretamente com “você”
-- Separe com <br><br> e numere 1., 2., 3.
-- Termine com: "{hashtag_str}"
-- Apenas retorne as legendas. Sem explicações.
-"""
+    Regras:
+    - A legenda 1 deve ser longa, com storytelling ou descrição detalhada.
+    - A legenda 2 deve ser de tamanho médio.
+    - A legenda 3 deve ser curta, com no máximo duas frases diretas.
+    - Varie o estilo e tom entre as três.
+    - Escreva com linguagem emocional e visual.
+    - Use emojis conforme solicitado. Se o usuário pedir "nenhum emoji", não inclua nenhum.
+    - Numere como 1., 2., 3. e separe com <br><br>
+    - Finalize cada uma com: "{hashtag_str}"
+
+    Apenas retorne as legendas, sem comentários adicionais.
+    """
+
     else:
         prompt = f"""
-Escreva 3 legendas simples e úteis para redes sociais baseadas no seguinte tema:
+Escreva 3 variações de legenda para o tema "{topic}", em {language}, para {platform}, com estilo {tone}.
 
-Plataforma: {platform}
-Tema: {topic}
-Tom: {tone}
-Idioma: {language}
-
-Instruções:
-- Escreva em {language}
-- Estilo direto e curto
-- Use emojis com moderação
-- Numere como 1., 2., 3., e separe com <br><br>
+Regras:
+- A legenda 1 deve ser longa, com detalhes e emoção.
+- A legenda 2 deve ser média, informativa e prática.
+- A legenda 3 deve ser curta, com no máximo 2 frases.
+- Use emojis com moderação.
+- Separe como 1., 2., 3. com <br><br>
 - Finalize com: "{hashtag_str}"
-- Sem explicações ou comentários
+- Sem comentários ou explicações.
 """
+
 
     response = client.chat.completions.create(
         model="gpt-4",
